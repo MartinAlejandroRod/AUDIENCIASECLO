@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Avisos de audiencias — Estudio Szlit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Inter:wght@400;450;500;600;700&display=swap" rel="stylesheet">
+
+<!-- Firebase (compat). Si no configurás el proyecto, la app funciona igual en modo local. -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<!-- Lectura de archivos .docx (opcional; si no hay conexión, se puede pegar el texto) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+
+<style>
+  :root{
+    --bg:#E9EBEE; --surface:#FFFFFF; --ink:#16202F; --muted:#606B7C; --faint:#8A93A1;
+    --line:#DFE2E7; --line-strong:#CBD1D9;
+    --accent:#1F4488; --accent-hover:#173568; --accent-soft:#E7EDF7;
+    --warn:#9A6410; --warn-soft:#FAF0DC; --warn-line:#EAD6A8;
+    --firma:#5B3BA8; --firma-soft:#EDE7FA; --firma-line:#CBB9EE;
+    --ok:#256B4B; --bubble:#F5F8F1; --bubble-edge:#8FB57A;
+    --radius:12px;
+    --shadow:0 1px 2px rgba(22,32,47,.06), 0 8px 24px rgba(22,32,47,.06);
+    --shadow-lift:0 2px 4px rgba(22,32,47,.08), 0 14px 40px rgba(22,32,47,.10);
+  }
+  *{box-sizing:border-box} html,body{margin:0}
+  body{background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;padding-bottom:64px}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+
+  header.top{background:var(--ink);color:#fff;border-bottom:3px solid var(--accent)}
+  .top-inner{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 0;flex-wrap:wrap}
+  .brand{display:flex;flex-direction:column;gap:1px;min-width:0}
+  .brand .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#9FB2D4;font-weight:600}
+  .brand .name{font-family:'Newsreader',Georgia,serif;font-size:24px;font-weight:500;letter-spacing:-.01em;line-height:1.1}
+  .status{font-size:12px;font-weight:600;padding:6px 12px;border-radius:20px;display:inline-flex;align-items:center;gap:7px}
+  .status .d{width:8px;height:8px;border-radius:50%}
+  .status.sync{background:#12351F;color:#7FD69B} .status.sync .d{background:#4FBE79}
+  .status.loc{background:#3A2C10;color:#E6BE6E} .status.loc .d{background:#D79B34}
+
+  /* Sub-barra de ajustes del día */
+  .subbar{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);margin-top:24px;padding:14px 20px;display:flex;gap:14px 32px;flex-wrap:wrap;align-items:center}
+  .sb-group{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .sb-group .k{font-size:12.5px;font-weight:600;color:var(--muted)}
+  .segL{display:inline-flex;background:#EEF0F3;border:1px solid var(--line);border-radius:9px;padding:3px}
+  .segL button{appearance:none;border:0;background:transparent;color:var(--muted);font:inherit;font-size:13px;font-weight:600;padding:6px 12px;border-radius:6px;cursor:pointer;transition:background .15s,color .15s}
+  .segL button[aria-pressed="true"]{background:var(--accent);color:#fff}
+  .segL button:hover:not([aria-pressed="true"]){color:var(--ink)}
+  input[type=date].dl{font:inherit;font-size:13px;font-weight:500;color:var(--ink);background:#fff;border:1.5px solid var(--line-strong);border-radius:8px;padding:7px 10px}
+  input[type=date].dl:disabled{opacity:.45;cursor:not-allowed}
+
+  .grid{display:grid;grid-template-columns:400px 1fr;gap:24px;margin-top:24px;align-items:start}
+  @media (max-width:900px){.grid{grid-template-columns:1fr}}
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line)}
+  .panel-head h2{margin:0;font-family:'Newsreader',Georgia,serif;font-size:18px;font-weight:500;letter-spacing:-.01em}
+  .count{font-size:12px;font-weight:600;color:var(--accent);background:var(--accent-soft);padding:3px 10px;border-radius:20px}
+
+  form{padding:20px}
+  .field{margin-bottom:16px} .field:last-of-type{margin-bottom:0}
+  label{display:block;font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:6px;letter-spacing:.01em}
+  label .opt{color:var(--faint);font-weight:500}
+  .control{width:100%;font:inherit;font-size:15px;color:var(--ink);background:#fff;border:1.5px solid var(--line-strong);border-radius:9px;padding:11px 13px;transition:border-color .15s,box-shadow .15s}
+  .control::placeholder{color:#A6AEBB}
+  .control:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  textarea.control{resize:vertical;min-height:74px;line-height:1.45}
+  .hint{font-size:12px;color:var(--faint);margin-top:6px;line-height:1.4}
+  .hint.warn{color:var(--warn)}
+
+  .firmaToggle{appearance:none;font:inherit;font-size:13.5px;font-weight:600;display:inline-flex;align-items:center;gap:8px;padding:11px 14px;border-radius:9px;cursor:pointer;border:1.5px dashed var(--line-strong);background:#fff;color:var(--muted);width:100%;justify-content:center;transition:all .15s}
+  .firmaToggle:hover{border-color:var(--firma-line);color:var(--firma)}
+  .firmaToggle[aria-pressed="true"]{background:var(--firma);border-style:solid;border-color:var(--firma);color:#fff}
+  .firma-note{display:none;font-size:12.5px;color:var(--firma);background:var(--firma-soft);border:1px solid var(--firma-line);border-radius:8px;padding:9px 12px;margin-top:14px;line-height:1.45}
+  form.firma-on #linkField{display:none}
+  form.firma-on .firma-note{display:block}
+
+  .actions{display:flex;gap:10px;margin-top:20px}
+  .btn{appearance:none;border:0;font:inherit;font-weight:600;font-size:14.5px;padding:12px 18px;border-radius:9px;cursor:pointer;transition:background .15s,transform .05s,color .15s,border-color .15s;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+  .btn:active{transform:translateY(1px)}
+  .btn-primary{background:var(--accent);color:#fff;flex:1} .btn-primary:hover{background:var(--accent-hover)}
+  .btn-ghost{background:#fff;color:var(--muted);border:1.5px solid var(--line-strong)} .btn-ghost:hover{border-color:var(--faint);color:var(--ink)}
+  .editing-note{display:none;align-items:center;gap:8px;font-size:12.5px;color:var(--warn);background:var(--warn-soft);border:1px solid var(--warn-line);border-radius:8px;padding:8px 12px;margin-bottom:16px}
+  .editing-note.on{display:flex}
+
+  .list{padding:16px 20px 20px}
+  .empty{text-align:center;padding:52px 20px;color:var(--faint)}
+  .empty .big{font-family:'Newsreader',Georgia,serif;font-size:18px;color:var(--muted);margin-bottom:6px}
+  .card{border:1px solid var(--line);border-radius:11px;background:#fff;padding:14px 16px;margin-bottom:14px;transition:box-shadow .15s,border-color .15s}
+  .card:last-child{margin-bottom:0} .card:hover{box-shadow:var(--shadow-lift)}
+  .card.is-nodata{border-color:var(--warn-line);background:linear-gradient(#fff,#fffdf8)}
+  .card.is-firma{border-color:var(--firma-line);background:linear-gradient(#fff,#fbf9ff)}
+  .card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+  .who{min-width:0}
+  .who .nm{font-weight:650;font-size:16px;letter-spacing:-.01em;word-break:break-word}
+  .who .meta{font-size:13px;color:var(--muted);margin-top:2px}
+  .who .meta b{color:var(--ink);font-weight:600}
+  .badge{font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:4px 9px;border-radius:6px;white-space:nowrap;flex-shrink:0}
+  .badge.ok{color:var(--ok);background:#E6F2EB}
+  .badge.no{color:var(--warn);background:var(--warn-soft)}
+  .badge.firma{color:var(--firma);background:var(--firma-soft)}
+  .bubble{margin-top:12px;background:var(--bubble);border:1px solid #E4EBDD;border-left:3px solid var(--bubble-edge);border-radius:8px;padding:11px 13px;font-size:13.5px;line-height:1.5;color:#2C3646;white-space:pre-wrap;word-break:break-word}
+  .bubble .lnk{color:var(--accent);word-break:break-all}
+  .card-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .mini{appearance:none;font:inherit;font-size:13px;font-weight:600;padding:8px 12px;border-radius:8px;cursor:pointer;border:1.5px solid var(--line-strong);background:#fff;color:var(--muted);transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+  .mini:hover{border-color:var(--faint);color:var(--ink)}
+  .mini.copy{background:var(--accent);border-color:var(--accent);color:#fff;flex:1;justify-content:center}
+  .mini.copy:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
+  .mini.copy.done{background:var(--ok);border-color:var(--ok)}
+  .mini.danger:hover{border-color:#C6483E;color:#C6483E}
+  .mini.done{color:var(--ok);border-color:#BFE0CD}
+  .mini.done:hover{background:#EAF5EF;border-color:var(--ok);color:var(--ok)}
+  .sec-head{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:4px 2px 12px}
+  .sec-head span{background:#EEF0F3;color:var(--muted);border-radius:20px;padding:2px 9px;font-size:11px;letter-spacing:0}
+  .sec-head.sent{margin-top:22px;border-top:1px solid var(--line);padding-top:18px}
+  .card.is-sent{opacity:.72;background:#FAFBFC}
+  .card.is-sent .bubble{background:#F2F4F6;border-color:#E4E7EB;border-left-color:#C3CAD3}
+  .badge.sent{color:#4B5563;background:#E9ECEF}
+  .sb-note{flex-basis:100%;font-size:12px;color:var(--faint);margin-top:2px}
+  .ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+
+  .util{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:20px;padding:14px 4px;color:var(--muted);font-size:13px}
+  .util .link{background:none;border:0;font:inherit;font-weight:600;color:var(--muted);cursor:pointer;padding:4px 2px;border-bottom:1.5px solid transparent}
+  .util .link:hover{color:var(--accent);border-color:var(--accent)}
+  .util .sep{color:var(--line-strong)}
+  .util .link.danger:hover{color:#C6483E;border-color:#C6483E}
+
+  .toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,20px);background:var(--ink);color:#fff;padding:12px 20px;border-radius:10px;font-size:14px;font-weight:500;box-shadow:var(--shadow-lift);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:50;display:flex;align-items:center;gap:9px}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+  .toast .dot{width:8px;height:8px;border-radius:50%;background:var(--bubble-edge)}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  .modal-ov{position:fixed;inset:0;background:rgba(15,22,33,.55);display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;z-index:60;overflow:auto}
+  .modal-ov[hidden]{display:none}
+  .modal{background:#fff;border-radius:14px;box-shadow:var(--shadow-lift);width:100%;max-width:560px;overflow:hidden}
+  .modal-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line)}
+  .modal-head h3{margin:0;font-family:'Newsreader',Georgia,serif;font-size:19px;font-weight:500}
+  .modal-x{appearance:none;border:0;background:none;font-size:18px;color:var(--faint);cursor:pointer;line-height:1;padding:4px}
+  .modal-x:hover{color:var(--ink)}
+  .modal-body{padding:20px;display:flex;flex-direction:column;gap:14px}
+  .modal-body .control{min-height:150px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.5}
+  .modal-body input[type=file]{font:inherit;font-size:13px;color:var(--muted)}
+  .imp-actions{display:flex;justify-content:flex-end}
+  #impPreview{max-height:250px;overflow:auto}
+  .imp-count{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--accent);margin-bottom:10px}
+  .imp-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 12px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;font-size:14px}
+  .imp-hora{color:var(--muted);margin-left:10px;font-size:13px}
+  .modal-foot{display:flex;justify-content:flex-end;gap:10px;padding:16px 20px;border-top:1px solid var(--line);background:#FAFBFC}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap top-inner">
+    <div class="brand">
+      <span class="eyebrow">Estudio Szlit &amp; Asociados</span>
+      <span class="name">Avisos de audiencias</span>
+    </div>
+    <span class="status loc" id="status"><span class="d"></span><span id="statusTxt">Modo local</span></span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="subbar">
+    <div class="sb-group">
+      <span class="k">Día de trabajo</span>
+      <input type="date" id="workday" class="dl" aria-label="Día de trabajo">
+    </div>
+    <div class="sb-group">
+      <span class="k">Los avisos son para</span>
+      <div class="segL" role="group" aria-label="Cuándo es la audiencia">
+        <button type="button" id="segManana" aria-pressed="true">Mañana</button>
+        <button type="button" id="segFecha" aria-pressed="false">Fecha específica</button>
+      </div>
+      <input type="date" id="sayDate" class="dl" disabled aria-label="Fecha de la audiencia">
+    </div>
+    <span class="sb-note">Todos los dispositivos que abran esta misma fecha ven y editan la misma lista. Los días quedan guardados; no se borra nada solo.</span>
+  </div>
+
+  <div class="grid">
+    <section class="panel" aria-label="Cargar aviso">
+      <div class="panel-head"><h2>Cargar aviso</h2><button type="button" class="mini" id="btnImportText"><svg class="ic" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>Importar lista</button></div>
+      <form id="frm" autocomplete="off">
+        <div class="editing-note" id="editNote">
+          <svg class="ic" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          <span>Editando un aviso. Guardá los cambios o cancelá.</span>
+        </div>
+
+        <div class="field">
+          <label for="nombre">Nombre del cliente</label>
+          <input class="control" type="text" id="nombre" placeholder="Ej.: María González">
+        </div>
+
+        <div class="field">
+          <label for="hora">Horario de la audiencia</label>
+          <input class="control" type="time" id="hora">
+        </div>
+
+        <div class="field">
+          <button type="button" class="firmaToggle" id="btnFirma" aria-pressed="false">
+            <svg class="ic" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            Audiencia de firma
+          </button>
+        </div>
+
+        <div class="field" id="linkField">
+          <label for="link">Link de acceso <span class="opt">— opcional</span></label>
+          <textarea class="control" id="link" placeholder="Pegá acá el link de la reunión (Zoom, Meet, etc.)"></textarea>
+          <p class="hint warn" id="linkHint" style="display:none">Sin link, el mensaje avisa que todavía no hay datos de acceso.</p>
+        </div>
+
+        <div class="firma-note">
+          Audiencia presencial: el mensaje incluye la dirección de la oficina y no lleva link.
+        </div>
+
+        <div class="actions">
+          <button type="button" class="btn btn-primary" id="btnAdd">Agregar a la lista</button>
+          <button type="button" class="btn btn-ghost" id="btnCancel" style="display:none">Cancelar</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel" aria-label="Lista de avisos">
+      <div class="panel-head"><h2>Lista de avisos</h2><span class="count" id="count">0</span></div>
+      <div class="list" id="list"></div>
+    </section>
+  </div>
+
+  <div class="util">
+    <span id="footNote"></span>
+    <span class="sep">·</span>
+    <button class="link" id="btnFaltantes">Copiar audiencias sin link</button>
+    <span class="sep">·</span>
+    <button class="link" id="btnExport">Exportar</button>
+    <button class="link" id="btnImport">Importar</button>
+    <span class="sep">·</span>
+    <button class="link danger" id="btnClear">Vaciar el día</button>
+    <input type="file" id="fileImport" accept="application/json" style="display:none">
+  </div>
+</div>
+
+<div class="modal-ov" id="importOv" hidden>
+  <div class="modal">
+    <div class="modal-head"><h3>Importar lista de audiencias</h3><button class="modal-x" id="impClose" aria-label="Cerrar">✕</button></div>
+    <div class="modal-body">
+      <p class="hint">Subí un <b>.txt</b> o <b>.docx</b>, o pegá el listado abajo. Detecto la parte actora, el horario y el link de cada audiencia, y marco las de firma.</p>
+      <input type="file" id="impFile" accept=".txt,.docx">
+      <textarea class="control" id="impText" placeholder="Pegá acá el listado de audiencias..."></textarea>
+      <div class="imp-actions"><button type="button" class="btn btn-ghost" id="impAnalyze">Analizar</button></div>
+      <div id="impPreview"></div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" id="impCancel">Cancelar</button>
+      <button type="button" class="btn btn-primary" id="impConfirm" disabled>Agregar avisos</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span class="dot"></span><span id="toastMsg"></span></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ==========================================================
+     CONFIGURACIÓN — completá esto para activar la sincronización
+     ========================================================== */
+  const FIREBASE_CONFIG = {
+    apiKey: "PEGAR_ACA",
+    authDomain: "PEGAR_ACA",
+    databaseURL: "PEGAR_ACA",
+    projectId: "PEGAR_ACA",
+    appId: "PEGAR_ACA"
+  };
+  // Dirección que aparece en los mensajes de audiencia de firma:
+  const DIRECCION = "Av. Corrientes 2335, 1°A, Capital Federal";
+  /* ========================================================== */
+
+  const $ = s => document.querySelector(s);
+  const el = {
+    status:$("#status"), statusTxt:$("#statusTxt"),
+    workday:$("#workday"), sayDate:$("#sayDate"),
+    segManana:$("#segManana"), segFecha:$("#segFecha"),
+    frm:$("#frm"), nombre:$("#nombre"), hora:$("#hora"), link:$("#link"),
+    linkHint:$("#linkHint"), btnFirma:$("#btnFirma"),
+    btnAdd:$("#btnAdd"), btnCancel:$("#btnCancel"), editNote:$("#editNote"),
+    list:$("#list"), count:$("#count"), footNote:$("#footNote"),
+    toast:$("#toast"), toastMsg:$("#toastMsg"),
+    btnExport:$("#btnExport"), btnImport:$("#btnImport"), btnClear:$("#btnClear"), fileImport:$("#fileImport"), btnFaltantes:$("#btnFaltantes")
+  };
+
+  let state = { workday:todayStr(), items:[], sayMode:"manana", sayDate:"" };
+  let editingId = null;
+  let firmaOn = false;
+
+  /* ---------- Fechas ---------- */
+  function toStr(dt){ const y=dt.getFullYear(),m=String(dt.getMonth()+1).padStart(2,"0"),d=String(dt.getDate()).padStart(2,"0"); return `${y}-${m}-${d}`; }
+  function todayStr(){ return toStr(new Date()); }
+  function tomorrowStr(){ const t=new Date(); t.setDate(t.getDate()+1); return toStr(t); }
+  function parseDate(s){ if(!s) return null; const [y,m,d]=s.split("-").map(Number); return new Date(y,m-1,d); }
+  const DIAS=["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+
+  function dayPhrases(){
+    if(state.sayMode==="manana") return {de:"de mañana", cuando:"mañana"};
+    const dt=parseDate(state.sayDate);
+    if(!dt) return {de:"de mañana", cuando:"mañana"};
+    const dd=String(dt.getDate()).padStart(2,"0"), mm=String(dt.getMonth()+1).padStart(2,"0"), dia=DIAS[dt.getDay()];
+    return {de:`del día ${dia} ${dd}/${mm}`, cuando:`el día ${dia} ${dd}/${mm}`};
+  }
+
+  /* ---------- Mensaje ---------- */
+  function buildMessage(it){
+    const p=dayPhrases();
+    if(it.firma){
+      return `¡Hola ${it.nombre}! Le escribo para dejarle el recordatorio de la audiencia de firma del acuerdo ${p.cuando} a las ${it.hora} hs.`
+        + `\n\nRecuerde que le esperamos en la oficina! Mi estudio está ubicado en ${DIRECCION}`;
+    }
+    const saludo=`¡Hola ${it.nombre}! Le escribo para dejarle el recordatorio de la audiencia ${p.de} a las ${it.hora} hs.`;
+    if(it.link && it.link.trim()) return `${saludo}\n\nDatos de la reunión:\n${it.link.trim()}`;
+    return `${saludo}\n\nAún no tengo los datos de acceso, ni bien me los indiquen se los paso por aquí!`;
+  }
+
+  /* ==========================================================
+     Capa de datos: Firebase si está configurado, si no localStorage
+     ========================================================== */
+  const hasFirebase = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey!=="PEGAR_ACA";
+
+  const DB = {
+    backend:"local", root:null, ref:null, listener:null, fecha:null, onChange:null,
+
+    init(){
+      if(hasFirebase && typeof firebase!=="undefined"){
+        try{
+          firebase.initializeApp(FIREBASE_CONFIG);
+          this.root=firebase.database();
+          this.backend="firebase";
+        }catch(e){ console.error("Firebase:",e); this.backend="local"; }
+      }
+      return this.backend;
+    },
+
+    open(fecha, onChange){
+      this.close();
+      this.fecha=fecha; this.onChange=onChange;
+      if(this.backend==="firebase"){
+        this.ref=this.root.ref("avisos/"+fecha);
+        this.listener=this.ref.on("value", snap=>{
+          const v=snap.val()||{};
+          const items=v.items ? Object.keys(v.items).map(k=>Object.assign({id:k}, v.items[k])) : [];
+          const cfg={sayMode:(v.cfg&&v.cfg.sayMode)||"manana", sayDate:(v.cfg&&v.cfg.sayDate)||""};
+          onChange(items,cfg);
+        }, err=>{ console.error(err); toast("Error de conexión con Firebase"); });
+      }else{
+        this._emitLocal();
+      }
+    },
+    close(){ if(this.backend==="firebase" && this.ref && this.listener) this.ref.off("value",this.listener); this.ref=null; this.listener=null; },
+    _emitLocal(){ const n=readLocal(this.fecha); this.onChange(n.items,{sayMode:n.sayMode,sayDate:n.sayDate}); },
+
+    putItem(it){
+      if(this.backend==="firebase"){ const {id,...rest}=it; this.root.ref("avisos/"+this.fecha+"/items/"+id).set(rest); }
+      else{ const n=readLocal(this.fecha); const i=n.items.findIndex(x=>x.id===it.id); if(i>=0)n.items[i]=it; else n.items.push(it); writeLocal(this.fecha,n); this._emitLocal(); }
+    },
+    delItem(id){
+      if(this.backend==="firebase"){ this.root.ref("avisos/"+this.fecha+"/items/"+id).remove(); }
+      else{ const n=readLocal(this.fecha); n.items=n.items.filter(x=>x.id!==id); writeLocal(this.fecha,n); this._emitLocal(); }
+    },
+    setCfg(cfg){
+      if(this.backend==="firebase"){ this.root.ref("avisos/"+this.fecha+"/cfg").set(cfg); }
+      else{ const n=readLocal(this.fecha); n.sayMode=cfg.sayMode; n.sayDate=cfg.sayDate; writeLocal(this.fecha,n); this._emitLocal(); }
+    },
+    clearDay(){
+      if(this.backend==="firebase"){ this.root.ref("avisos/"+this.fecha).remove(); }
+      else{ localStorage.removeItem("szlit_dia_"+this.fecha); this._emitLocal(); }
+    }
+  };
+
+  function readLocal(fecha){
+    try{ const v=JSON.parse(localStorage.getItem("szlit_dia_"+fecha)); if(v) return {items:v.items||[], sayMode:v.sayMode||"manana", sayDate:v.sayDate||""}; }catch(e){}
+    return {items:[], sayMode:"manana", sayDate:""};
+  }
+  function writeLocal(fecha,n){ try{ localStorage.setItem("szlit_dia_"+fecha, JSON.stringify(n)); }catch(e){} }
+
+  /* ---------- Abrir un día ---------- */
+  function onData(items,cfg){
+    items.sort((a,b)=> (a.hora||"").localeCompare(b.hora||""));
+    state.items=items; state.sayMode=cfg.sayMode; state.sayDate=cfg.sayDate||"";
+    render();
+  }
+  function openDay(fecha){
+    state.workday=fecha;
+    try{ localStorage.setItem("szlit_workday", fecha); }catch(e){}
+    el.workday.value=fecha;
+    DB.open(fecha, onData);
+  }
+
+  /* ---------- Render ---------- */
+  function esc(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  function render(){
+    el.segManana.setAttribute("aria-pressed", state.sayMode==="manana");
+    el.segFecha.setAttribute("aria-pressed", state.sayMode==="fecha");
+    el.sayDate.disabled = state.sayMode!=="fecha";
+    if(state.sayDate) el.sayDate.value=state.sayDate;
+
+    const pend=state.items.filter(x=>!x.sent);
+    const enviados=state.items.filter(x=>x.sent);
+    el.count.textContent=pend.length;
+
+    if(state.items.length===0){
+      el.list.innerHTML=`<div class="empty"><div class="big">No hay avisos para este día</div><div>Cargá el primer cliente desde el panel de la izquierda.</div></div>`;
+      return;
+    }
+    let html="";
+    if(pend.length){
+      if(enviados.length) html+=`<div class="sec-head">Pendientes <span>${pend.length}</span></div>`;
+      html+=pend.map(it=>cardHtml(it,false)).join("");
+    }
+    if(enviados.length){
+      html+=`<div class="sec-head sent">Enviados <span>${enviados.length}</span></div>`;
+      html+=enviados.map(it=>cardHtml(it,true)).join("");
+    }
+    el.list.innerHTML=html;
+  }
+
+  const IC={
+    copy:'<svg class="ic" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+    check:'<svg class="ic" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>',
+    edit:'<svg class="ic" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+    undo:'<svg class="ic" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-1"/></svg>',
+    trash:'<svg class="ic" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>'
+  };
+
+  function cardHtml(it,isSent){
+    const noData=!it.firma && !(it.link && it.link.trim());
+    let cls=it.firma?"is-firma":(noData?"is-nodata":"");
+    if(isSent) cls+=" is-sent";
+    const badge = isSent ? '<span class="badge sent">Enviado</span>'
+      : (it.firma?'<span class="badge firma">Firma</span>':(noData?'<span class="badge no">Sin datos</span>':'<span class="badge ok">Con link</span>'));
+    const bubble=esc(buildMessage(it)).replace(/(https?:\/\/[^\s]+)/g,'<span class="lnk">$1</span>');
+    const actions = isSent
+      ? `<button class="mini copy" data-act="copy">${IC.copy}Copiar mensaje</button>
+         <button class="mini" data-act="undo">${IC.undo}Volver a pendientes</button>
+         <button class="mini danger" data-act="del" aria-label="Eliminar">${IC.trash}</button>`
+      : `<button class="mini copy" data-act="copy">${IC.copy}Copiar mensaje</button>
+         <button class="mini done" data-act="done">${IC.check}Hecho</button>
+         <button class="mini" data-act="edit">${IC.edit}Editar</button>
+         <button class="mini danger" data-act="del" aria-label="Eliminar">${IC.trash}</button>`;
+    return `<article class="card ${cls}" data-id="${esc(it.id)}">
+        <div class="card-top">
+          <div class="who"><div class="nm">${esc(it.nombre)}</div><div class="meta">Audiencia a las <b>${esc(it.hora)} hs</b></div></div>
+          ${badge}
+        </div>
+        <div class="bubble">${bubble}</div>
+        <div class="card-actions">${actions}</div>
+      </article>`;
+  }
+
+  /* ---------- Firma toggle ---------- */
+  function setFirma(on){ firmaOn=on; el.btnFirma.setAttribute("aria-pressed",on); el.frm.classList.toggle("firma-on",on); }
+  el.btnFirma.addEventListener("click",()=>setFirma(!firmaOn));
+
+  /* ---------- Alta / edición ---------- */
+  function resetForm(){
+    editingId=null; el.frm.reset(); setFirma(false);
+    el.btnAdd.textContent="Agregar a la lista";
+    el.btnCancel.style.display="none";
+    el.editNote.classList.remove("on");
+    el.linkHint.style.display="none";
+  }
+  function addOrSave(){
+    const nombre=el.nombre.value.trim(), hora=el.hora.value.trim(), link=el.link.value.trim();
+    if(!nombre){ el.nombre.focus(); toast("Falta el nombre del cliente"); return; }
+    if(!hora){ el.hora.focus(); toast("Falta el horario de la audiencia"); return; }
+    const prev = editingId ? state.items.find(x=>x.id===editingId) : null;
+    const it={ id: editingId || (Date.now()+"-"+Math.random().toString(36).slice(2,7)), nombre, hora, firma:firmaOn, link: firmaOn?"":link, sent: prev? !!prev.sent : false };
+    DB.putItem(it);
+    toast(editingId?"Aviso actualizado":"Aviso agregado");
+    resetForm(); el.nombre.focus();
+  }
+  el.btnAdd.addEventListener("click", addOrSave);
+  el.btnCancel.addEventListener("click", resetForm);
+  el.frm.addEventListener("submit", e=>e.preventDefault());
+  [el.nombre, el.hora].forEach(inp=> inp.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); addOrSave(); }}));
+  el.link.addEventListener("input", ()=>{ el.linkHint.style.display = el.link.value.trim()?"none":"block"; });
+
+  function startEdit(id){
+    const it=state.items.find(x=>x.id===id); if(!it) return;
+    editingId=id;
+    el.nombre.value=it.nombre; el.hora.value=it.hora; el.link.value=it.link||"";
+    setFirma(!!it.firma);
+    el.linkHint.style.display=(it.link&&it.link.trim())||it.firma?"none":"block";
+    el.btnAdd.textContent="Guardar cambios";
+    el.btnCancel.style.display="inline-flex";
+    el.editNote.classList.add("on");
+    window.scrollTo({top:0,behavior:"smooth"}); el.nombre.focus();
+  }
+
+  el.list.addEventListener("click", e=>{
+    const btn=e.target.closest("[data-act]"); if(!btn) return;
+    const id=e.target.closest(".card").dataset.id, act=btn.dataset.act;
+    const it=state.items.find(x=>x.id===id); if(!it) return;
+    if(act==="copy") copyText(buildMessage(it), btn);
+    else if(act==="edit") startEdit(id);
+    else if(act==="done"){ DB.putItem(Object.assign({}, it, {sent:true})); toast("Aviso enviado ✓"); }
+    else if(act==="undo"){ DB.putItem(Object.assign({}, it, {sent:false})); toast("Volvió a pendientes"); }
+    else if(act==="del"){ if(confirm(`¿Eliminar el aviso de ${it.nombre}?`)){ DB.delItem(id); if(editingId===id) resetForm(); toast("Aviso eliminado"); } }
+  });
+
+  /* ---------- Copiar ---------- */
+  function copyText(text, btn){
+    const done=()=>{ if(btn){ const o=btn.innerHTML; btn.classList.add("done"); btn.innerHTML='<svg class="ic" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg> ¡Copiado!'; setTimeout(()=>{ btn.classList.remove("done"); btn.innerHTML=o; },1600); } toast("Mensaje copiado al portapapeles"); };
+    if(navigator.clipboard && window.isSecureContext){ navigator.clipboard.writeText(text).then(done).catch(()=>fallback(text,done)); }
+    else fallback(text,done);
+  }
+  function fallback(text,done){ const ta=document.createElement("textarea"); ta.value=text; ta.style.position="fixed"; ta.style.opacity="0"; document.body.appendChild(ta); ta.select(); try{ document.execCommand("copy"); done(); }catch(e){ toast("No se pudo copiar"); } document.body.removeChild(ta); }
+
+  /* ---------- Controles del día ---------- */
+  el.workday.addEventListener("change", ()=>{ if(el.workday.value) openDay(el.workday.value); });
+  el.segManana.addEventListener("click", ()=> DB.setCfg({sayMode:"manana", sayDate:state.sayDate||""}));
+  el.segFecha.addEventListener("click", ()=>{
+    const d = state.sayDate || tomorrowStr();
+    DB.setCfg({sayMode:"fecha", sayDate:d});
+    setTimeout(()=>el.sayDate.focus(),0);
+  });
+  el.sayDate.addEventListener("change", ()=> DB.setCfg({sayMode:"fecha", sayDate:el.sayDate.value}));
+
+  /* ---------- Exportar / Importar / Vaciar ---------- */
+  el.btnExport.addEventListener("click", ()=>{
+    const blob=new Blob([JSON.stringify({fecha:state.workday, items:state.items, cfg:{sayMode:state.sayMode,sayDate:state.sayDate}},null,2)],{type:"application/json"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`avisos-${state.workday}.json`; a.click(); URL.revokeObjectURL(a.href); toast("Día exportado");
+  });
+  el.btnImport.addEventListener("click", ()=> el.fileImport.click());
+  el.fileImport.addEventListener("change", e=>{
+    const f=e.target.files[0]; if(!f) return; const r=new FileReader();
+    r.onload=()=>{ try{ const d=JSON.parse(r.result); if(Array.isArray(d.items)){ d.items.forEach(it=>{ if(!it.id) it.id=Date.now()+"-"+Math.random().toString(36).slice(2,7); DB.putItem(it); }); if(d.cfg) DB.setCfg(d.cfg); toast("Día importado"); } else toast("Archivo no válido"); }catch(err){ toast("No se pudo leer el archivo"); } };
+    r.readAsText(f); el.fileImport.value="";
+  });
+  el.btnClear.addEventListener("click", ()=>{ if(state.items.length===0) return; if(confirm("¿Vaciar todos los avisos de este día?")){ DB.clearDay(); if(editingId) resetForm(); toast("Día vaciado"); } });
+
+  el.btnFaltantes.addEventListener("click", ()=>{
+    const faltan=state.items.filter(x=>!x.firma && !(x.link && x.link.trim())).sort((a,b)=>(a.hora||"").localeCompare(b.hora||""));
+    if(!faltan.length){ toast("No hay audiencias sin link 👌"); return; }
+    const p=dayPhrases();
+    const txt="Audiencias sin link — para "+p.cuando+"\n(pendientes de recibir el acceso)\n\n"
+      + faltan.map(it=>"• "+it.hora+" hs — "+it.nombre).join("\n");
+    copyText(txt, null);
+  });
+
+  /* ---------- Toast ---------- */
+  let toastT;
+  function toast(msg){ el.toastMsg.textContent=msg; el.toast.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(()=>el.toast.classList.remove("show"),2200); }
+
+  /* ---------- Importación masiva ---------- */
+  const imp = {
+    ov:$("#importOv"), file:$("#impFile"), text:$("#impText"), analyze:$("#impAnalyze"),
+    preview:$("#impPreview"), confirm:$("#impConfirm"), close:$("#impClose"),
+    cancel:$("#impCancel"), open:$("#btnImportText")
+  };
+  let parsed=[];
+  const pad=n=>String(n).padStart(2,"0");
+
+  function formatNombre(s){
+    s=(s||"").trim().replace(/\s+/g," ");
+    const c=s.indexOf(",");
+    const nombres = c>-1 ? s.slice(c+1).trim() : s;   // con coma: nombres van después; sin coma: todo
+    const first = (nombres.split(" ")[0] || s).trim();
+    return first ? first.charAt(0).toUpperCase()+first.slice(1).toLowerCase() : s;
+  }
+
+  function parseBulk(text){
+    const out=[];
+    (text||"").split(/\n\s*\n/).forEach(raw=>{
+      const lines=raw.split(/\n/).map(l=>l.trim()).filter(Boolean);
+      if(!lines.length) return;
+      const header=lines.find(l=>/^\d{1,2}[:.]\d{2}/.test(l))||lines[0];
+      const tm=header.match(/^(\d{1,2})[:.](\d{2})/);
+      const segs=header.split(/\s+-\s+/);
+      let caratula = segs.length>1 ? segs[segs.length-1].trim() : header.replace(/^\d{1,2}[:.]\d{2}\s*-?\s*/,"").trim();
+      const actora=caratula.split(/\s+c\/\s+/i)[0].trim();
+      const up=raw.toUpperCase();
+      let firma=/\bFIRMA\b/.test(up)||/QUE VENGA/.test(up);
+      let hora=tm?pad(tm[1])+":"+tm[2]:"";
+      const qv=raw.match(/QUE VENGA[^\d]*(\d{1,2})(?:[.:h](\d{2}))?/i);
+      if(qv){ firma=true; hora=pad(qv[1])+":"+(qv[2]||"00"); }
+      const link=firma?"":lines.filter(l=>/https?:\/\//i.test(l)).join("\n");
+      if(!actora||!hora) return;
+      out.push({nombre:formatNombre(actora), hora, firma, link});
+    });
+    return out;
+  }
+
+  function escI(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  function renderPreview(){
+    if(!parsed.length){ imp.preview.innerHTML='<p class="hint warn">No se detectó ninguna audiencia. Revisá que cada una empiece con el horario y tenga la carátula con "C/".</p>'; imp.confirm.disabled=true; imp.confirm.textContent="Agregar avisos"; return; }
+    imp.confirm.disabled=false;
+    imp.confirm.textContent=`Agregar ${parsed.length} aviso${parsed.length>1?"s":""}`;
+    imp.preview.innerHTML='<div class="imp-count">'+parsed.length+' audiencias detectadas</div>'+parsed.map(it=>{
+      const b=it.firma?'<span class="badge firma">Firma</span>':(it.link?'<span class="badge ok">Con link</span>':'<span class="badge no">Sin datos</span>');
+      return `<div class="imp-row"><div><b>${escI(it.nombre)}</b><span class="imp-hora">${escI(it.hora)} hs</span></div>${b}</div>`;
+    }).join("");
+  }
+
+  function openImp(){ imp.ov.hidden=false; }
+  function closeImp(){ imp.ov.hidden=true; imp.text.value=""; imp.preview.innerHTML=""; imp.confirm.disabled=true; imp.confirm.textContent="Agregar avisos"; imp.file.value=""; parsed=[]; }
+
+  imp.open.addEventListener("click", openImp);
+  imp.close.addEventListener("click", closeImp);
+  imp.cancel.addEventListener("click", closeImp);
+  imp.ov.addEventListener("click", e=>{ if(e.target===imp.ov) closeImp(); });
+  imp.analyze.addEventListener("click", ()=>{ parsed=parseBulk(imp.text.value); renderPreview(); });
+  imp.file.addEventListener("change", async e=>{
+    const f=e.target.files[0]; if(!f) return;
+    const name=(f.name||"").toLowerCase();
+    try{
+      let txt="";
+      if(name.endsWith(".docx")){
+        if(typeof mammoth==="undefined"){ toast("Para .docx hace falta conexión. Pegá el texto."); return; }
+        const buf=await f.arrayBuffer(); txt=(await mammoth.extractRawText({arrayBuffer:buf})).value;
+      }else if(name.endsWith(".doc")){ toast("Guardalo como .docx o pegá el texto."); return; }
+      else { txt=await f.text(); }
+      imp.text.value=txt; parsed=parseBulk(txt); renderPreview();
+    }catch(err){ console.error(err); toast("No se pudo leer el archivo"); }
+  });
+  imp.confirm.addEventListener("click", ()=>{
+    if(!parsed.length) return;
+    parsed.forEach(p=> DB.putItem({ id:Date.now()+"-"+Math.random().toString(36).slice(2,7), nombre:p.nombre, hora:p.hora, firma:p.firma, link:p.link, sent:false }));
+    const n=parsed.length; closeImp(); toast(`${n} aviso${n>1?"s":""} agregado${n>1?"s":""}`);
+  });
+
+  /* ---------- Arranque ---------- */
+  const backend=DB.init();
+  if(backend==="firebase"){ el.status.className="status sync"; el.statusTxt.textContent="Sincronizado"; el.footNote.textContent="Los avisos se comparten en tiempo real entre todos los que abren este día."; }
+  else{ el.status.className="status loc"; el.statusTxt.textContent="Solo este dispositivo"; el.footNote.textContent="Modo local: los avisos se guardan solo en este navegador."; }
+
+  let start=todayStr();
+  try{ const saved=localStorage.getItem("szlit_workday"); if(saved) start=saved; }catch(e){}
+  // si el guardado es de un día pasado, arrancamos en hoy
+  if(start<todayStr()) start=todayStr();
+  el.workday.value=start;
+  openDay(start);
+})();
+</script>
+</body>
+</html>
