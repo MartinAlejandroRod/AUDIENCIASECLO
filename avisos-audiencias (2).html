@@ -329,7 +329,7 @@ const firebaseConfig = {
   /* ==========================================================
      Capa de datos: Firebase si está configurado, si no localStorage
      ========================================================== */
-  const hasFirebase = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey!=="PEGAR_ACA";
+  const hasFirebase = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey!=="FIREBASE_CONFIG";
 
   const DB = {
     backend:"local", root:null, ref:null, listener:null, fecha:null, onChange:null,
